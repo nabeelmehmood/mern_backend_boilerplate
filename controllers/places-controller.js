@@ -1,30 +1,36 @@
-const HttpError = require('../models/http-error');
-const uuid = require('uuid/v4');
+const HttpError = require("../models/http-error");
+const { validationResult } = require("express-validator");
+const geo = require("mapbox-geocoding");
+const uuid = require("uuid/v4");
+
+const geocoder = require("../util/location");
+
+geo.setAccessToken();
 
 let DUMMY_PLACES = [
-    {
-      id: "p1",
-      title: "Empire state",
-      description: "Sky Scraper",
-      location: {
-        lat: 40.748,
-        lng: -73.98715
-      },
-      address: "New York",
-      creator: "u1"
+  {
+    id: "p1",
+    title: "Empire state",
+    description: "Sky Scraper",
+    location: {
+      lat: 40.748,
+      lng: -73.98715
     },
-    {
-      id: "p2",
-      title: "Empire state",
-      description: "Sky Scraper",
-      location: {
-        lat: 40.748,
-        lng: -73.98715
-      },
-      address: "New York",
-      creator: "u1"
-    }
-  ];
+    address: "New York",
+    creator: "u1"
+  },
+  {
+    id: "p2",
+    title: "Empire state",
+    description: "Sky Scraper",
+    location: {
+      lat: 40.748,
+      lng: -73.98715
+    },
+    address: "New York",
+    creator: "u1"
+  }
+];
 
 const getPlaceById = (req, res, next) => {
   const placeId = req.params.pid;
@@ -50,40 +56,64 @@ const getPlacesByUserId = (req, res, next) => {
   res.json({ places });
 };
 
-const createPlace = (req, res, next) => {
-    const { title, description, coordinates, address, creator } = req.body;
-    const createdPlace = {
-        id: uuid(),
-        title,
-        description,
-        location: coordinates,
-        address,
-        creator
-    }
+const createPlace = async (req, res, next) => {
+  const errors = validationResult(req);
 
-    DUMMY_PLACES.push(createdPlace);
+  if (!errors.isEmpty) {
+    console.log(errors);
+    next(new Error("Invalid inputs passed, please check your data", 422));
+  }
 
-    res.status(201).json({createdPlace});
-}
+  const { title, description, address, creator } = req.body;
+
+  let newCoords = await geocoder(address);
+
+  newCoords = newCoords ? newCoords : { lat: 0, lng: 0 };
+
+  const createdPlace = {
+    id: uuid(),
+    title,
+    description,
+    location: newCoords,
+    address,
+    creator
+  };
+
+  DUMMY_PLACES.push(createdPlace);
+
+  res.status(201).json({ createdPlace });
+};
 
 const updatePlaceById = (req, res, next) => {
-    const { title, description } = req.body;
-    const placeId = req.params.pid;
+  const errors = validationResult(req);
 
-    const updatedPlace = { ...DUMMY_PLACES.find(p => p.id === placeId) }; 
-    const placeIndex = DUMMY_PLACES.findIndex(p => p.id == placeId);
-    updatedPlace.title = title;
-    updatedPlace.description = description;
+  if (!errors.isEmpty) {
+    console.log(errors);
+    throw new Error("Invalid inputs passed, please check your data", 422);
+  }
 
-    DUMMY_PLACES[placeIndex] = updatedPlace;
-    res.status(200).json({place: updatedPlace});
-}
+  const { title, description } = req.body;
+  const placeId = req.params.pid;
+
+  const updatedPlace = { ...DUMMY_PLACES.find(p => p.id === placeId) };
+  const placeIndex = DUMMY_PLACES.findIndex(p => p.id == placeId);
+  updatedPlace.title = title;
+  updatedPlace.description = description;
+
+  DUMMY_PLACES[placeIndex] = updatedPlace;
+  res.status(200).json({ place: updatedPlace });
+};
 
 const deletePlace = (req, res, next) => {
-    const placeId = req.params.pid;
-    DUMMY_PLACES = DUMMY_PLACES.filter(p => p.id !== placeId);
-    res.status(200).json({message: 'Deleted'});
-}
+  const placeId = req.params.pid;
+
+  if (!DUMMY_PLACES.find(p => p.id === placeId)) {
+    throw new HttpError("Could not find a place for given id: " + placeId, 404);
+  }
+
+  DUMMY_PLACES = DUMMY_PLACES.filter(p => p.id !== placeId);
+  res.status(200).json({ message: "Deleted" });
+};
 
 exports.getPlaceById = getPlaceById;
 exports.getPlacesByUserId = getPlacesByUserId;
