@@ -2,9 +2,11 @@ const HttpError = require("../models/http-error");
 const { validationResult } = require("express-validator");
 const geo = require("mapbox-geocoding");
 const uuid = require("uuid/v4");
+const mongoose = require("mongoose");
 
 const geocoder = require("../util/location");
 const Place = require("../models/place");
+const User = require("../models/user");
 
 geo.setAccessToken();
 
@@ -42,22 +44,22 @@ const getPlaceById = async (req, res, next) => {
 
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.uid;
-  let places;
+  let userWithPlaces;
   try {
-    places = await Place.find({ creator: userId });
+    userWithPlaces = await User.findById(userId).populate('places');
   } catch (err) {
     return next(
       new HttpError("Something went wrong. Could not find places"),
       500
     );
   }
-  if (!places || places.length === 0) {
+  if (!userWithPlaces || userWithPlaces.places.length === 0) {
     return next(
       new HttpError("Could not find places for provided user id", 404)
     );
   }
 
-  res.json({ places: places.map(place => place.toObject({ getters: true })) });
+  res.json({ places: userWithPlaces.places.map(place => place.toObject({ getters: true })) });
 };
 
 const createPlace = async (req, res, next) => {
@@ -83,8 +85,25 @@ const createPlace = async (req, res, next) => {
     creator
   });
 
+  let user;
+
   try {
+    user = await User.findById(creator);
+  } catch (err) {
+    return next(new HttpError("Creating place failed, please try later", 500));
+  }
+
+  if (!user) {
+    return next(new HttpError("Could not find user for provided id", 404));
+  }
+
+  try {
+    // const session = await mongoose.startSession();
+    // session.startTransaction();
     await createdPlace.save();
+    user.places.push(createdPlace);
+    await user.save();
+    // await session.commitTransaction();
   } catch (err) {
     const error = new HttpError("Creating place failed", 500);
     return next(error);
@@ -97,7 +116,9 @@ const updatePlaceById = async (req, res, next) => {
 
   if (!errors.isEmpty) {
     console.log(errors);
-    throw new Error("Invalid inputs passed, please check your data", 422);
+    return next(
+      new Error("Invalid inputs passed, please check your data", 422)
+    );
   }
 
   const { title, description } = req.body;
@@ -132,13 +153,16 @@ const deletePlace = async (req, res, next) => {
   let place;
 
   try {
-    place = await Place.findById(placeId);
+    place = await Place.findById(placeId).populate("creator");
   } catch (err) {
     return next(
       new HttpError("Something went wrong. Could not delete place", 500)
     );
   }
 
+  if (!place) {
+    return next(new HttpError("Could not find place for the id", 404));
+  }
   try {
     await place.remove();
   } catch (err) {
