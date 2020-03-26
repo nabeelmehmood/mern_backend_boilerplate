@@ -3,6 +3,7 @@ const { validationResult } = require("express-validator");
 const geo = require("mapbox-geocoding");
 const uuid = require("uuid/v4");
 const mongoose = require("mongoose");
+const fs = require("fs");
 
 const geocoder = require("../util/location");
 const Place = require("../models/place");
@@ -46,7 +47,7 @@ const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.uid;
   let userWithPlaces;
   try {
-    userWithPlaces = await User.findById(userId).populate('places');
+    userWithPlaces = await User.findById(userId).populate("places");
   } catch (err) {
     return next(
       new HttpError("Something went wrong. Could not find places"),
@@ -59,7 +60,11 @@ const getPlacesByUserId = async (req, res, next) => {
     );
   }
 
-  res.json({ places: userWithPlaces.places.map(place => place.toObject({ getters: true })) });
+  res.json({
+    places: userWithPlaces.places.map(place =>
+      place.toObject({ getters: true })
+    )
+  });
 };
 
 const createPlace = async (req, res, next) => {
@@ -80,7 +85,7 @@ const createPlace = async (req, res, next) => {
     title,
     description,
     address,
-    image: "https://source.unsplash.com/random",
+    image: req.file.path,
     location: newCoords,
     creator
   });
@@ -163,6 +168,9 @@ const deletePlace = async (req, res, next) => {
   if (!place) {
     return next(new HttpError("Could not find place for the id", 404));
   }
+
+  const imagePath = place.image;
+
   try {
     await place.remove();
   } catch (err) {
@@ -170,6 +178,10 @@ const deletePlace = async (req, res, next) => {
       new HttpError("Something went wrong. Could not delete place", 500)
     );
   }
+
+  fs.unlink(imagePath, err => {
+      console.log(err)
+  })
 
   res.status(200).json({ message: "Deleted" });
 };

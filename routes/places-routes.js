@@ -3,7 +3,7 @@ const { check } = require("express-validator");
 const router = express.Router();
 
 const placesControllers = require("../controllers/places-controller");
-
+const fileUpload = require("../middleware/file-upload");
 
 router.get("/", placesControllers.getAllPlaces);
 
@@ -13,6 +13,7 @@ router.get("/user/:uid", placesControllers.getPlacesByUserId);
 
 router.post(
   "/",
+  fileUpload.single("image"),
   [
     check("title")
       .not()

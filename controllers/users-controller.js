@@ -4,7 +4,6 @@ const { validationResult } = require("express-validator");
 const User = require("../models/user");
 const HttpError = require("../models/http-error");
 
-
 const getUsers = async (req, res, next) => {
   let users;
   try {
@@ -25,7 +24,7 @@ const signup = async (req, res, next) => {
     );
   }
 
-  const { name, email, password } = req.body;
+  const { name, email, password,  } = req.body;
 
   let existingUser;
 
@@ -46,7 +45,7 @@ const signup = async (req, res, next) => {
   const createdUser = new User({
     name,
     email,
-    image: "https://source.unsplash.com/random",
+    image: req.file.path,
     password,
     places: []
   });
@@ -75,7 +74,10 @@ const login = async (req, res, next) => {
     return next(new HttpError("Could not log you in", 401));
   }
 
-  res.json({ message: "Logged in" });
+  res.json({
+    message: "Logged in",
+    user: existingUser.toObject({ getters: true })
+  });
 };
 
 exports.getUsers = getUsers;
