@@ -75,7 +75,7 @@ const createPlace = async (req, res, next) => {
     next(new Error("Invalid inputs passed, please check your data", 422));
   }
 
-  const { title, description, address, creator } = req.body;
+  const { title, description, address } = req.body;
 
   let newCoords = await geocoder(address);
 
@@ -87,13 +87,13 @@ const createPlace = async (req, res, next) => {
     address,
     image: req.file.path,
     location: newCoords,
-    creator
+    creator: req.userData.userId
   });
 
   let user;
 
   try {
-    user = await User.findById(creator);
+    user = await User.findById(req.userData.userId);
   } catch (err) {
     return next(new HttpError("Creating place failed, please try later", 500));
   }
@@ -139,6 +139,10 @@ const updatePlaceById = async (req, res, next) => {
     );
   }
 
+  if (place.creator.toString() !== req.userData.userId) {
+    return next(new HttpError("You are not allowed to edit this place", 401));
+  }
+
   place.title = title;
   place.description = description;
 
@@ -169,6 +173,10 @@ const deletePlace = async (req, res, next) => {
     return next(new HttpError("Could not find place for the id", 404));
   }
 
+  if (place.creator.id !== req.userData.userId) {
+    return next(new HttpError("You are not allowed to delete this place", 401));
+  }
+
   const imagePath = place.image;
 
   try {
@@ -180,8 +188,8 @@ const deletePlace = async (req, res, next) => {
   }
 
   fs.unlink(imagePath, err => {
-      console.log(err)
-  })
+    console.log(err);
+  });
 
   res.status(200).json({ message: "Deleted" });
 };
